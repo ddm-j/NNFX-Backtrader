@@ -223,7 +223,7 @@ class strategy1(bt.Strategy):
         self.log('Current Closing Price: %.5f' % self.dataclose[0])
 
         # Check if We have a Pending Order and Exit Function to Avoid Creating Duplicate
-        if self.order:
+        if len(self.open_orders['sl']) > 0 or len(self.open_orders['tp']) > 0:
             return
 
         # Apply Strategy Trading Logic
@@ -266,7 +266,7 @@ class strategy1(bt.Strategy):
                                         parent=main,
                                         transmit=True)
 
-                self.open_orders['sl'].extend([stop_loss])
+                self.open_orders['sl'].append(stop_loss)
                 self.open_orders['tp'].append(take_profit)
 
             elif self.decide_trade() < 0.0:
@@ -293,7 +293,7 @@ class strategy1(bt.Strategy):
                                        parent=main,
                                        transmit=True)
 
-                self.open_orders['sl'].extend([stop_loss])
+                self.open_orders['sl'].append(stop_loss)
                 self.open_orders['tp'].append(take_profit)
 
         else:
