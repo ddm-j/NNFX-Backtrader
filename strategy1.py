@@ -12,15 +12,15 @@ import itertools
 class strategy1(bt.Strategy):
     params = dict(
         base_ind='kijun',
-        base_params=(40,),
-        c1_ind='idosc',
-        c1_params=(50,5),
-        c2_ind='itrend',
-        c2_params=(30,),
+        base_params=(30,),
+        c1_ind='itrend',
+        c1_params=(20,),
+        c2_ind='cmf',
+        c2_params=(20,),
         volume_ind='wae',
-        volume_params=(80, 20, 40, 20, 2.0, 3.7),
+        volume_params=(150, 20, 40, 20, 2.0, 3.7),
         exit_ind='ssl',
-        exit_params=(50,),
+        exit_params=(20,),
         atr_period=14,
         sl=1.5,
         tp=1.0,
@@ -40,8 +40,10 @@ class strategy1(bt.Strategy):
         self.order = None
         self.open_orders = {
             'sl': [],
-            'tp': []
+            'tp': [],
+            'tracker':[]
         }
+        self.broker.set_coc=True
 
         # Money Management Indicators
         self.atr = bt.indicators.ATR(period=self.p.atr_period, plot=False)
@@ -51,12 +53,10 @@ class strategy1(bt.Strategy):
 
         # Generate Strategy Binary Indicators
         self.baseline, self.too_far = ig.baseline_indicator(self.p.base_ind, self.p.base_params, plot=False)
-        self.c1 = ig.entry_indicator(self.p.c1_ind, self.p.c1_params, plot=False)
+        self.c1 = ig.entry_indicator(self.p.c1_ind, self.p.c1_params, plot=True)
         self.c2 = ig.entry_indicator(self.p.c2_ind, self.p.c2_params, plot=False)
         self.volume = ig.volume_indicator(self.p.volume_ind, self.p.volume_params, plot=False)
         self.exit = ig.exit_indicator(self.p.exit_ind, self.p.exit_params, plot=False)
-
-        self.butter = AdaptiveLaguerreFilter(self.data,length=10)
 
     def refresh_conditions(self):
         self.trade_conditons = {
@@ -93,6 +93,7 @@ class strategy1(bt.Strategy):
         # Clean Open Orders Dictionary
         for o in self.open_orders['sl']:
             if not o.alive():
+                self.open_orders['tracker'].remove(o.ref)
                 self.open_orders['sl'].remove(o)
         for o in self.open_orders['tp']:
             if not o.alive():
@@ -102,7 +103,20 @@ class strategy1(bt.Strategy):
 
         # Call Custom Notification Function to Keep Code Clean
         date = self.data.datetime.datetime().date()
-        notifier(order, date)
+        res = notifier(order, date, self.open_orders['tracker'])
+        # Take Profit Hit, Initialize Trailing Stop Order
+        if res:
+            size = res[0]
+            price = res[1]
+            if size > 0:
+                move_stop = self.buy(size=size,
+                                      exectype=bt.Order.StopTrail,
+                                      trailamount=self.params.sl*self.atr[0])
+            elif size < 0:
+                move_stop = self.sell(size=size,
+                                     exectype=bt.Order.StopTrail,
+                                     trailamount=self.params.sl*self.atr[0])
+
         self.bar_executed = len(self)
         self.order = None
 
@@ -110,7 +124,7 @@ class strategy1(bt.Strategy):
 
         # Call Custom Notification Function to Keep Code Clean
         date = self.data.datetime.datetime().date()
-        notifier(trade, date)
+        notifier(trade, date,[])
 
     def size_position(self, stop_amount, risk, method=0, exchange_rate=None, JPY_pair=False):
 
@@ -216,9 +230,6 @@ class strategy1(bt.Strategy):
         self.refresh_conditions()
         self.clean_orders()
 
-        print(len(self.open_orders['sl']))
-        print(len(self.open_orders['tp']))
-
         # Echo Current Closing Price
         self.log('Current Closing Price: %.5f' % self.dataclose[0])
 
@@ -268,6 +279,7 @@ class strategy1(bt.Strategy):
 
                 self.open_orders['sl'].append(stop_loss)
                 self.open_orders['tp'].append(take_profit)
+                self.open_orders['tracker'].append(stop_loss.ref)
 
             elif self.decide_trade() < 0.0:
                 # Enter Long Position
@@ -295,12 +307,12 @@ class strategy1(bt.Strategy):
 
                 self.open_orders['sl'].append(stop_loss)
                 self.open_orders['tp'].append(take_profit)
+                self.open_orders['tracker'].append(stop_loss.ref)
 
         else:
 
-
-            buyexit_conds = [self.exit > 0]
-            sellexit_conds = [self.exit < 0]
+            buyexit_conds = [self.exit > 0, self.baseline > 0, self.c1 > 0, self.c2 > 0]
+            sellexit_conds = [self.exit < 0, self.baseline < 0, self.c1 < 0, self.c2 < 0]
 
             if self.position.size > 0:
                 # Check for Sell Exit Signal
@@ -312,7 +324,6 @@ class strategy1(bt.Strategy):
                 if any(buyexit_conds):
                     self.order = self.close()
 
-
 if __name__ == '__main__':
     # Create a cerebro entity
     cerebro = bt.Cerebro()
@@ -323,7 +334,7 @@ if __name__ == '__main__':
 
     # Datas are in a subfolder of the samples. Need to find where the script is
     # because it could have been called from anywhere
-    datapath = 'Data/NZDUSD_daily.csv'
+    datapath = 'Data/GBPUSD_daily.csv'
 
     # Create a Data Feed
     data = bt.feeds.GenericCSVData(

@@ -40,7 +40,7 @@ class forexSpreadCommisionScheme(bt.CommInfoBase):
 
         return comm
 
-def notifier(order,date):
+def notifier(order,date,sl_list):
     if hasattr(order,'Accepted'):
         # Is an Order Object
         if order.status == order.Accepted:
@@ -53,6 +53,8 @@ def notifier(order,date):
                 order.size,
                 'NA' if not order.price else round(order.price, 5)
             ))
+            print('-' * 80)
+
 
         if order.status == order.Completed:
             print('-' * 32, ' NOTIFY ORDER ', '-' * 32)
@@ -69,8 +71,12 @@ def notifier(order,date):
             print('-' * 80)
 
         if order.status == order.Canceled:
+            if order.ref == sl_list[-1]:
+                textfield = ' - Take Profit Hit, Setting new Stop Level'
+            else:
+                textfield = ''
             print('-' * 32, ' NOTIFY ORDER ', '-' * 32)
-            print('Order Canceled')
+            print('Order Canceled'+textfield)
             print('{}, Status {}: Ref: {}, Size: {}, Price: {}'.format(
                 date,
                 order.status,
@@ -78,6 +84,9 @@ def notifier(order,date):
                 order.size,
                 'NA' if not order.price else round(order.price, 5)
             ))
+            print('-' * 80)
+            if order.ref == sl_list[-1]:
+                return order.size/2, order.price
 
         if order.status == order.Rejected:
             print('-' * 32, ' NOTIFY ORDER ', '-' * 32)
