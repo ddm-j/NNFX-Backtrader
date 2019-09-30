@@ -12,7 +12,7 @@ import os
 import glob
 
 
-class strategy1(bt.Strategy):
+class NNFX(bt.Strategy):
     params = dict(
         base_ind='itrend',
         base_params=(40,),
@@ -29,7 +29,7 @@ class strategy1(bt.Strategy):
         tp=1.0,
         risk=2.0,
         oneplot=False,
-        verbose=True,
+        verbose=False,
     )
 
     def log(self, txt, dt=None):
@@ -387,7 +387,7 @@ if __name__ == '__main__':
 
     # Add our strategy
 
-    cerebro.addstrategy(strategy1)
+    cerebro.addstrategy(NNFX)
 
     # Get Data Files from Data Folder
     paths, names = file_browser()
@@ -413,9 +413,16 @@ if __name__ == '__main__':
     cerebro.addanalyzer(bt.analyzers.SQN, _name="sqn")
 
     # Set Commission:
-    comminfo = forexSpreadCommisionScheme(spread=2, acc_counter_currency=False)
-    cerebro.broker.addcommissioninfo(comminfo)
-    cerebro.broker.setcommission(leverage=20)
+    for i in range(len(datasets)):
+        pair = datasets[i][1]
+        base = pair[0:3]
+        counter = pair[3:]
+        acc_counter = True if 'USD' == counter else False
+        jpy_pair = True if 'JPY' in [base, counter] else False
+
+        comminfo = forexSpreadCommisionScheme(spread=2, acc_counter_currency=acc_counter, JPY_pair=jpy_pair)
+        cerebro.broker.addcommissioninfo(comminfo, name=pair)
+        cerebro.broker.setcommission(leverage=20, name=pair)
 
     # Print out the starting conditions
     print('Starting Portfolio Value: %.2f' % cerebro.broker.getvalue())

@@ -28,6 +28,7 @@ class forexSpreadCommisionScheme(bt.CommInfoBase):
         If JPY pair change the multiplier accordingly.
         If account currency is same as the base currency, change pip value calc.
         '''
+
         if self.p.JPY_pair == True:
             multiplier = 0.01
         else:
