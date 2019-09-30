@@ -1,4 +1,5 @@
 import backtrader as bt
+import glob
 
 # Custome Forex Commission Scheme
 
@@ -40,81 +41,86 @@ class forexSpreadCommisionScheme(bt.CommInfoBase):
 
         return comm
 
-def notifier(order,date,sl_list):
+def notifier(order,date,sl_list,verbose=True):
     if hasattr(order,'Accepted'):
         # Is an Order Object
         if order.status == order.Accepted:
-            print('-' * 32, ' NOTIFY ORDER ', '-' * 32)
-            print('Order Accepted')
-            print('{}, {}, Status {}: Ref: {}, Size: {}, Price: {}'.format(
-                date,
-                order.data._name,
-                order.status,
-                order.ref,
-                order.size,
-                'NA' if not order.price else round(order.price, 5)
-            ))
-            print('-' * 80)
+            if verbose:
+                print('-' * 32, ' NOTIFY ORDER ', '-' * 32)
+                print('Order Accepted')
+                print('{}, {}, Status {}: Ref: {}, Size: {}, Price: {}'.format(
+                    date,
+                    order.data._name,
+                    order.status,
+                    order.ref,
+                    order.size,
+                    'NA' if not order.price else round(order.price, 5)
+                ))
+                print('-' * 80)
 
 
         if order.status == order.Completed:
-            print('-' * 32, ' NOTIFY ORDER ', '-' * 32)
-            print('Order Completed')
-            print('{}, {}, Status {}: Ref: {}, Size: {}, Price: {}'.format(
-                date,
-                order.data._name,
-                order.status,
-                order.ref,
-                order.size,
-                'NA' if not order.price else round(order.price, 5)
-            ))
-            print('Created: {} Price: {} Size: {}'.format(bt.num2date(order.created.dt), order.created.price,
-                                                          order.created.size))
-            print('-' * 80)
+            if verbose:
+                print('-' * 32, ' NOTIFY ORDER ', '-' * 32)
+                print('Order Completed')
+                print('{}, {}, Status {}: Ref: {}, Size: {}, Price: {}'.format(
+                    date,
+                    order.data._name,
+                    order.status,
+                    order.ref,
+                    order.size,
+                    'NA' if not order.price else round(order.price, 5)
+                ))
+                print('Created: {} Price: {} Size: {}'.format(bt.num2date(order.created.dt), order.created.price,
+                                                              order.created.size))
+                print('-' * 80)
 
         if order.status == order.Canceled:
             if order.ref == sl_list[-1]:
                 textfield = ' - Take Profit Hit, Setting new Stop Level'
             else:
                 textfield = ''
-            print('-' * 32, ' NOTIFY ORDER ', '-' * 32)
-            print('Order Canceled'+textfield)
-            print('{}, {}, Status {}: Ref: {}, Size: {}, Price: {}'.format(
-                date,
-                order.data._name,
-                order.status,
-                order.ref,
-                order.size,
-                'NA' if not order.price else round(order.price, 5)
-            ))
-            print('-' * 80)
+            if verbose:
+                print('-' * 32, ' NOTIFY ORDER ', '-' * 32)
+                print('Order Canceled'+textfield)
+                print('{}, {}, Status {}: Ref: {}, Size: {}, Price: {}'.format(
+                    date,
+                    order.data._name,
+                    order.status,
+                    order.ref,
+                    order.size,
+                    'NA' if not order.price else round(order.price, 5)
+                ))
+                print('-' * 80)
             if order.ref == sl_list[-1]:
                 return order.size/2, order.price
 
         if order.status == order.Rejected:
-            print('-' * 32, ' NOTIFY ORDER ', '-' * 32)
-            print('WARNING! Order Rejected')
-            print('{}, {}, Status {}: Ref: {}, Size: {}, Price: {}'.format(
-                date,
-                order.data._name,
-                order.status,
-                order.ref,
-                order.size,
-                'NA' if not order.price else round(order.price, 5)
-            ))
-            print('-' * 80)
+            if verbose:
+                print('-' * 32, ' NOTIFY ORDER ', '-' * 32)
+                print('WARNING! Order Rejected')
+                print('{}, {}, Status {}: Ref: {}, Size: {}, Price: {}'.format(
+                    date,
+                    order.data._name,
+                    order.status,
+                    order.ref,
+                    order.size,
+                    'NA' if not order.price else round(order.price, 5)
+                ))
+                print('-' * 80)
 
     else:
         # Order is actually a "trade"
         trade = order
         if trade.isclosed:
-            print('-' * 32, ' NOTIFY TRADE ', '-' * 32)
-            print('{}, Close Price: {}, Profit, Gross {}, Net {}'.format(
-                date,
-                trade.price,
-                round(trade.pnl, 2),
-                round(trade.pnlcomm, 2)))
-            print('-' * 80)
+            if verbose:
+                print('-' * 32, ' NOTIFY TRADE ', '-' * 32)
+                print('{}, Close Price: {}, Profit, Gross {}, Net {}'.format(
+                    date,
+                    trade.price,
+                    round(trade.pnl, 2),
+                    round(trade.pnlcomm, 2)))
+                print('-' * 80)
 
 
 def printTradeAnalysis(analyzer):
@@ -157,3 +163,8 @@ class CSVData(bt.feeds.GenericCSV):
         ('openinterest',-1),
         ('dtformat','%d.%m.%Y %H:%M:%S.000'),
     )
+
+def file_browser():
+    paths = [f.split('\\')[1] for f in glob.glob('Data/*.csv')]
+    names = [f.split('.')[0] for f in paths]
+    return paths, names

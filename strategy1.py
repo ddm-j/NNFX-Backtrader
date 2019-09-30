@@ -7,25 +7,29 @@ from custom_indicators import *
 from custom_functions import *
 import BinaryGenerator as BG
 import itertools
+import time
+import os
+import glob
 
 
 class strategy1(bt.Strategy):
     params = dict(
-        base_ind='kijun',
-        base_params=(30,),
+        base_ind='itrend',
+        base_params=(40,),
         c1_ind='itrend',
-        c1_params=(20,),
+        c1_params=(40,),
         c2_ind='cmf',
-        c2_params=(20,),
+        c2_params=(35,),
         volume_ind='wae',
-        volume_params=(150, 20, 40, 20, 2.0, 3.7),
+        volume_params=(80, 20, 40, 20, 2.0, 3.7),
         exit_ind='ssl',
-        exit_params=(20,),
+        exit_params=(30,),
         atr_period=14,
         sl=1.5,
         tp=1.0,
         risk=2.0,
         oneplot=False,
+        verbose=True,
     )
 
     def log(self, txt, dt=None):
@@ -45,7 +49,11 @@ class strategy1(bt.Strategy):
         self.igs = dict()
         self.closes = dict()
         self.open_orders = dict()
+        self.data_dict = dict()
         for i, d in enumerate(self.datas):
+            # Data Dictionary
+            self.data_dict[d._name] = d
+
             # Open Orders
             self.open_orders[d] = {
             'sl': [],
@@ -121,7 +129,7 @@ class strategy1(bt.Strategy):
 
         # Call Custom Notification Function to Keep Code Clean
         dt, dn = self.datetime.date(), order.data._name
-        res = notifier(order, dt, self.open_orders[order.data]['tracker'])
+        res = notifier(order, dt, self.open_orders[order.data]['tracker'],verbose=self.p.verbose)
         # Take Profit Hit, Initialize Trailing Stop Order
         if res:
             size = res[0]
@@ -144,7 +152,7 @@ class strategy1(bt.Strategy):
 
         # Call Custom Notification Function to Keep Code Clean
         date = self.data.datetime.datetime().date()
-        notifier(trade, date,[])
+        notifier(trade, date,[],verbose=self.p.verbose)
 
     def size_position(self, d, stop_amount, risk):
         pair = d._name
@@ -158,7 +166,14 @@ class strategy1(bt.Strategy):
         elif base != self.accn_currency and counter != self.accn_currency:
             method = 2
             exchange_pair = self.accn_currency+counter
-            exchange_rate = []
+
+            # Check if Exchange Pair Exists
+            if exchange_pair in list(self.data_dict.keys()):
+                exchange_rate = self.closes[self.data_dict[exchange_pair]][0]
+            # Check if Reverse of Exchange Pair Exists
+            elif counter+self.accn_currency in list(self.data_dict.keys()):
+                exchange_rate = self.closes[self.data_dict[counter+self.accn_currency]][0]
+                exchange_rate = 1/exchange_rate
 
         price = self.closes[d][0]
         stop = price - stop_amount
@@ -199,12 +214,12 @@ class strategy1(bt.Strategy):
         # Baseline Crossing Logic (Did we go too far? Need to Look for a Pullback?)
         if self.inds[d]['baseline'] != 0.0 and self.inds[d]['too_far'][0]:
             # Too far from baseline - no trading should occur
-            print('CAUTION BASELINE CROSS TOO FAR - CHECKING FOR PULLBACK')
+            if self.p.verbose: print('CAUTION BASELINE CROSS TOO FAR - CHECKING FOR PULLBACK')
             self.trade_conditons[self.inds[d]['baseline'][0]][d]['baseline'] = False
         elif self.inds[d]['baseline'][-1] != 0.0 and self.inds[d]['too_far'][-1] and not self.inds[d]['too_far'][0]:
             # Previous Candle was a Baseline Cross more than 1xATR
             # We are currently not "too far" from the baseline
-            print('PULLBACK DETECTED - BASELINE SAYS GO')
+            if self.p.verbose: print('PULLBACK DETECTED - BASELINE SAYS GO')
             self.trade_conditons[1.0][d]['baseline'] = self.inds[d]['baseline'][-1]>0
             self.trade_conditons[-1.0][d]['baseline'] = self.inds[d]['baseline'][-1]<0
 
@@ -236,7 +251,7 @@ class strategy1(bt.Strategy):
                 # Continuation Opportunity Detected!
                 # Double Check Confirmation Indicator 2
                 if self.inds[d]['c2'][0] == c1_hist[0]:
-                    print('CONTINUATION TRADE DETECTED')
+                    if self.p.verbose: print('CONTINUATION TRADE DETECTED')
                     # Update the Corresponding Buy/Sell Conditions
                     for key in self.trade_conditons[self.inds[d]['c1'][0]][d]:
                         self.trade_conditons[self.inds[d]['c1'][0]][d][key] = True
@@ -255,7 +270,7 @@ class strategy1(bt.Strategy):
 
         trade = self.decide_trade(d)
         if idx > 7 and trade != 0.0:
-            print('BRIDGE TOO FAR, DO NOT TRADE')
+            if self.p.verbose: print('BRIDGE TOO FAR, DO NOT TRADE')
             self.trade_conditons[trade][d]['c1'] = False
 
     def next(self):
@@ -374,12 +389,12 @@ if __name__ == '__main__':
 
     cerebro.addstrategy(strategy1)
 
-    # Datas are in a subfolder of the samples. Need to find where the script is
-    # because it could have been called from anywhere
+    # Get Data Files from Data Folder
+    paths, names = file_browser()
+
     dpath = 'Data/'
     datasets = [
-        (dpath+'GBPUSD_daily.csv','GBPUSD'),
-        (dpath+'NZDUSD_daily.csv','NZDUSD')
+        (dpath+path,name) for path, name in zip(paths,names)
     ]
 
     # Create a Data Feeds and Add to Cerebro
@@ -406,14 +421,17 @@ if __name__ == '__main__':
     print('Starting Portfolio Value: %.2f' % cerebro.broker.getvalue())
 
     # Run over everything
+    t0 = time.time()
     strategies = cerebro.run()
+    t1 = time.time()
     firstStrat = strategies[0]
 
     # Print out the final result
     print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
+    print('Backtest Time: %.2fs' % (t1-t0))
 
     # print the analyzers
     printTradeAnalysis(firstStrat.analyzers.ta.get_analysis())
     printSQN(firstStrat.analyzers.sqn.get_analysis())
 
-    cerebro.plot(style='candle')
+    #cerebro.plot(style='candle')
