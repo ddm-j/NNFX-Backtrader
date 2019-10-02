@@ -29,7 +29,7 @@ class NNFX(bt.Strategy):
         tp=1.0,
         risk=2.0,
         oneplot=False,
-        verbose=False,
+        verbose=True,
     )
 
     def log(self, txt, dt=None):
@@ -53,26 +53,20 @@ class NNFX(bt.Strategy):
         for i, d in enumerate(self.datas):
             # Data Dictionary
             self.data_dict[d._name] = d
-
             # Open Orders
             self.open_orders[d] = {
             'sl': [],
             'tp': [],
             'tracker':[]
             }
-
             # Closes
             self.closes[d] = d.close
-
             # Binary Generator
             self.igs[d] = BG.IndicatorGenerator(d)
-
             self.inds[d] = dict()
             # Money Management Indicators
             self.inds[d]['atr'] = bt.indicators.ATR(d,period=self.p.atr_period, plot=False)
-
             # Generate Strategy Binary Indicators
-
             self.inds[d]['baseline'], self.inds[d]['too_far'] = self.igs[d].baseline_indicator(self.p.base_ind, self.p.base_params, plot=False)
             self.inds[d]['c1'] = self.igs[d].entry_indicator(self.p.c1_ind, self.p.c1_params, plot=True)
             self.inds[d]['c2'] = self.igs[d].entry_indicator(self.p.c2_ind, self.p.c2_params, plot=False)
@@ -82,6 +76,34 @@ class NNFX(bt.Strategy):
             if i > 0:  # Check we are not on the first loop of data feed:
                 if self.p.oneplot == True:
                     d.plotinfo.plotmaster = self.datas[0]
+
+        # Set Commission and Determine which pairs need live exchange rates
+        self.exchange_pairs = dict()
+        for key in list(self.data_dict.keys()):
+            base = key[0:3]
+            counter = key[3:]
+            JPY = True if 'JPY' in [base, counter] else False
+            if counter == self.accn_currency:
+                # Set Commission for Pairs where Counter and Account Currency are the Same
+                comminfo = forexSpreadCommisionScheme(spread=2,method=0,JPY_pair=JPY, leverage=20)
+                self.broker.addcommissioninfo(comminfo,name=key)
+            elif base == self.accn_currency:
+                # Set Commission for Pairs where base and Account Currency are the Same
+                comminfo = forexSpreadCommisionScheme(spread=2, method=1, JPY_pair=JPY, leverage=20)
+                self.broker.addcommissioninfo(comminfo,name=key)
+            elif base != self.accn_currency and counter != self.accn_currency:
+                self.exchange_pairs[key] = dict()
+                forward = self.accn_currency + counter
+                reverse = counter + self.accn_currency
+
+                if forward in list(self.data_dict.keys()):
+                    self.exchange_pairs[key]['pair'] = forward
+                    self.exchange_pairs[key]['JPY'] = JPY
+                    self.exchange_pairs[key]['invert'] = False
+                elif reverse in list(self.data_dict.keys()):
+                    self.exchange_pairs[key]['pair'] = reverse
+                    self.exchange_pairs[key]['JPY'] = JPY
+                    self.exchange_pairs[key]['invert'] = True
 
     def refresh_conditions(self):
         self.trade_conditons = dict()
@@ -196,7 +218,7 @@ class NNFX(bt.Strategy):
         pip_value = cash_risk / stop_pips_int
 
         if method == 1:
-            # pip_value = pip_value * price
+            pip_value = pip_value * price
             units = pip_value / multiplier
             return units
 
@@ -208,6 +230,19 @@ class NNFX(bt.Strategy):
         else:  # is method 0
             units = pip_value / multiplier
             return units
+
+    def set_commission(self, d):
+
+        exchange_pair = self.exchange_pairs[d._name]['pair']
+        exchange_rate = self.closes[self.data_dict[exchange_pair]][0]
+        exchange_rate = 1.0 / exchange_rate if self.exchange_pairs[d._name]['invert'] else exchange_rate
+        print('Cross Rate: %s, %.5f' % (self.exchange_pairs[d._name]['pair'],exchange_rate))
+        comminfo = forexSpreadCommisionScheme(spread=2,
+                                              method=2,
+                                              JPY_pair=self.exchange_pairs[d._name]['JPY'],
+                                              exchange_rate=exchange_rate,
+                                              leverage=20)
+        self.broker.addcommissioninfo(comminfo, name=d._name)
 
     def pullback(self,d):
 
@@ -274,7 +309,6 @@ class NNFX(bt.Strategy):
             self.trade_conditons[trade][d]['c1'] = False
 
     def next(self):
-
         # Make Sure we have the most recent trading conditions:
         self.refresh_conditions()
         self.clean_orders()
@@ -307,6 +341,11 @@ class NNFX(bt.Strategy):
                 if self.decide_trade(d) > 0.0:
                     # Enter Long Position
                     # Calculate Risk Profile
+
+                    if d._name in list(self.exchange_pairs.keys()):
+                        #Set Commission for Cross Pair
+                        self.set_commission(d)
+
                     size = round(self.size_position(d, self.p.sl * self.inds[d]['atr'], self.p.risk)/2)
                     price = self.closes[d]
                     tp = price + self.p.tp * self.inds[d]['atr']
@@ -338,6 +377,11 @@ class NNFX(bt.Strategy):
                 elif self.decide_trade(d) < 0.0:
                     # Enter Long Position
                     # Calculate Risk Profile
+
+                    if d._name in list(self.exchange_pairs.keys()):
+                        #Set Commission for Cross Pair
+                        self.set_commission(d)
+
                     size = round(self.size_position(d, self.p.sl * self.inds[d]['atr'], self.p.risk)/2)
                     price = self.closes[d]
                     tp = price - self.p.tp * self.inds[d]['atr']
@@ -412,17 +456,17 @@ if __name__ == '__main__':
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="ta")
     cerebro.addanalyzer(bt.analyzers.SQN, _name="sqn")
 
-    # Set Commission:
-    for i in range(len(datasets)):
-        pair = datasets[i][1]
-        base = pair[0:3]
-        counter = pair[3:]
-        acc_counter = True if 'USD' == counter else False
-        jpy_pair = True if 'JPY' in [base, counter] else False
-
-        comminfo = forexSpreadCommisionScheme(spread=2, acc_counter_currency=acc_counter, JPY_pair=jpy_pair)
-        cerebro.broker.addcommissioninfo(comminfo, name=pair)
-        cerebro.broker.setcommission(leverage=20, name=pair)
+    # # Set Commission:
+    # for i in range(len(datasets)):
+    #     pair = datasets[i][1]
+    #     base = pair[0:3]
+    #     counter = pair[3:]
+    #     acc_counter = True if 'USD' == counter else False
+    #     jpy_pair = True if 'JPY' in [base, counter] else False
+    #
+    #     comminfo = forexSpreadCommisionScheme(spread=2, acc_counter_currency=acc_counter, JPY_pair=jpy_pair)
+    #     cerebro.broker.addcommissioninfo(comminfo, name=pair)
+    #     cerebro.broker.setcommission(leverage=20, name=pair)
 
     # Print out the starting conditions
     print('Starting Portfolio Value: %.2f' % cerebro.broker.getvalue())

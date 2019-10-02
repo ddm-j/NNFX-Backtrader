@@ -18,7 +18,8 @@ class forexSpreadCommisionScheme(bt.CommInfoBase):
         ('spread', 2.0),
         ('stocklike', False),
         ('JPY_pair', False),
-        ('acc_counter_currency', True),
+        ('method', 0),
+        ('exchange_rate', 0.0),
         ('commtype', bt.CommInfoBase.COMM_FIXED),
         )
 
@@ -29,16 +30,23 @@ class forexSpreadCommisionScheme(bt.CommInfoBase):
         If account currency is same as the base currency, change pip value calc.
         '''
 
-        if self.p.JPY_pair == True:
-            multiplier = 0.01
-        else:
-            multiplier = 0.0001
 
-        if self.p.acc_counter_currency == True:
-            comm = abs((self.p.spread * (size * multiplier)/2))
+        multiplier = 100.0 if self.p.JPY_pair else 1.0
 
-        else:
-            comm = abs((self.p.spread * ((size / price) * multiplier)/2))
+        if self.p.method == 0:
+            # Account Currency Same as Counter - Pip Cost $0.0001
+            pip_cost = 0.0001
+        elif self.p.method == 1:
+            # Acoount Currency Same as Base - Pip Cost $0.0001/USDXXX
+            pip_cost = 0.0001/price
+        elif self.p.method == 2:
+            # Account Currency Neither Base or Counter - Pip Cost $0.0001/Exchange_Rate
+            # Exchange Rate = AccountCurrency/Counter
+            pip_cost = 0.0001/self.p.exchange_rate
+
+        pip_cost = pip_cost#*multiplier
+
+        comm = self.p.spread*pip_cost*size
 
         return comm
 
