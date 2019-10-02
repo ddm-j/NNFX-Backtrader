@@ -44,7 +44,7 @@ class forexSpreadCommisionScheme(bt.CommInfoBase):
             # Exchange Rate = AccountCurrency/Counter
             pip_cost = 0.0001/self.p.exchange_rate
 
-        pip_cost = pip_cost#*multiplier
+        pip_cost = pip_cost*multiplier
 
         comm = self.p.spread*pip_cost*size
 
