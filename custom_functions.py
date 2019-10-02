@@ -30,7 +30,6 @@ class forexSpreadCommisionScheme(bt.CommInfoBase):
         If account currency is same as the base currency, change pip value calc.
         '''
 
-
         multiplier = 100.0 if self.p.JPY_pair else 1.0
 
         if self.p.method == 0:
@@ -44,9 +43,9 @@ class forexSpreadCommisionScheme(bt.CommInfoBase):
             # Exchange Rate = AccountCurrency/Counter
             pip_cost = 0.0001/self.p.exchange_rate
 
-        pip_cost = pip_cost*multiplier
+        #pip_cost = pip_cost*multiplier
 
-        comm = self.p.spread*pip_cost*size
+        comm = self.p.spread*pip_cost*abs(size)/2
 
         return comm
 

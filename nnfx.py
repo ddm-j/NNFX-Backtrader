@@ -85,11 +85,11 @@ class NNFX(bt.Strategy):
             JPY = True if 'JPY' in [base, counter] else False
             if counter == self.accn_currency:
                 # Set Commission for Pairs where Counter and Account Currency are the Same
-                comminfo = forexSpreadCommisionScheme(spread=2,method=0,JPY_pair=JPY, leverage=20)
+                comminfo = forexSpreadCommisionScheme(spread=2,method=0,JPY_pair=JPY)
                 self.broker.addcommissioninfo(comminfo,name=key)
             elif base == self.accn_currency:
                 # Set Commission for Pairs where base and Account Currency are the Same
-                comminfo = forexSpreadCommisionScheme(spread=2, method=1, JPY_pair=JPY, leverage=20)
+                comminfo = forexSpreadCommisionScheme(spread=2, method=1, JPY_pair=JPY)
                 self.broker.addcommissioninfo(comminfo,name=key)
             elif base != self.accn_currency and counter != self.accn_currency:
                 self.exchange_pairs[key] = dict()
@@ -147,6 +147,11 @@ class NNFX(bt.Strategy):
                 if not o.alive():
                     self.open_orders[d]['tp'].remove(o)
 
+    def check_positions(self):
+        self.position_dict = dict()
+        for i, d in enumerate(self.datas):
+            self.position_dict[d._name] = self.getposition(d).size
+
     def notify_order(self, order):
 
         # Call Custom Notification Function to Keep Code Clean
@@ -185,7 +190,7 @@ class NNFX(bt.Strategy):
             method = 0
         elif base == self.accn_currency:
             method = 1
-        elif base != self.accn_currency and counter != self.accn_currency:
+        elif self.accn_currency not in [base, counter]:
             method = 2
             exchange_pair = self.accn_currency+counter
 
@@ -236,12 +241,12 @@ class NNFX(bt.Strategy):
         exchange_pair = self.exchange_pairs[d._name]['pair']
         exchange_rate = self.closes[self.data_dict[exchange_pair]][0]
         exchange_rate = 1.0 / exchange_rate if self.exchange_pairs[d._name]['invert'] else exchange_rate
+        print(d._name)
         print('Cross Rate: %s, %.5f' % (self.exchange_pairs[d._name]['pair'],exchange_rate))
         comminfo = forexSpreadCommisionScheme(spread=2,
                                               method=2,
                                               JPY_pair=self.exchange_pairs[d._name]['JPY'],
-                                              exchange_rate=exchange_rate,
-                                              leverage=20)
+                                              exchange_rate=exchange_rate)
         self.broker.addcommissioninfo(comminfo, name=d._name)
 
     def pullback(self,d):
@@ -312,6 +317,7 @@ class NNFX(bt.Strategy):
         # Make Sure we have the most recent trading conditions:
         self.refresh_conditions()
         self.clean_orders()
+        self.check_positions()
 
         # Echo Current Closing Price
         #self.log('Current Closing Price: %.5f' % self.dataclose[0])
@@ -323,9 +329,8 @@ class NNFX(bt.Strategy):
 
             # Apply Strategy Trading Logic
             pos = self.getposition(d).size
-
             # Check if we are in the Market - Only Proceed if we are not
-            if not pos:
+            if all(v == 0 for v in list(self.position_dict.values())):
 
                 # Check Pullback & Bridge too Far Logic
                 if self.inds[d]['baseline'] != 0.0:
@@ -347,6 +352,7 @@ class NNFX(bt.Strategy):
                         self.set_commission(d)
 
                     size = round(self.size_position(d, self.p.sl * self.inds[d]['atr'], self.p.risk)/2)
+                    print(size)
                     price = self.closes[d]
                     tp = price + self.p.tp * self.inds[d]['atr']
                     sl = price - self.p.sl * self.inds[d]['atr']
