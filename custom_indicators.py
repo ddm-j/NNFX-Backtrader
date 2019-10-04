@@ -1,6 +1,7 @@
 import backtrader as bt
 import backtrader.indicators as bitind
 import numpy as np
+from scipy import stats
 import math
 
 class iFisher(bt.Indicator):
@@ -751,6 +752,9 @@ class Butterworth(bt.Indicator):
         ('poles', 2)
     )
 
+    plotlines = dict(p=dict(_plotskip=True, ),
+                     )
+
     plotinfo = dict(
         plot=True,
         plotname='Butterworth Filter',
@@ -893,6 +897,123 @@ class AdaptiveLaguerreFilter(bt.Indicator):
         self.l.L3[0] = -(1 - a) * self.l.L2[0] + self.l.L2[-1] + (1 - a) * self.l.L3[-1]
         self.l.filter[0] = (self.l.L0[0] + 2*self.l.L1[0] + 2*self.l.L2[0] + self.l.L3[0])/6
 
+class SqueezeVolatility(bt.Indicator):
+    # Clone of the TradingBear Squeeze Volatility Indicator
+
+    lines = ('hist', 'sqz', 'y', 'ma')
+
+    params = (
+        ('period', 10),
+        ('mult', 2),
+        ('period_kc', 10),
+        ('mult_kc', 1.5),
+        ('movav', bt.ind.SMA)
+    )
+
+    plotinfo = dict(
+        plot=True,
+        plotname='Squeeze Volatility',
+        subplot=True,
+        plotlinelabels=True)
+
+    plotlines = dict(sqz=dict(_plotskip=False, ),
+                     y=dict(_plotskip=True, ),
+                     ma=dict(_plotskip=True, ),
+                     )
+
+    def __init__(self):
+
+        self.addminperiod(self.p.period_kc*2)
+        bands = bt.indicators.BollingerBands(self.data, period=self.p.period, devfactor=self.p.mult)
+        self.l.ma = ma = self.p.movav(self.data,period=self.p.period_kc)
+        atr = bt.indicators.ATR(self.data,period=self.p.period_kc)
+        rma = self.p.movav(atr.atr, period=self.p.period_kc)
+        uKC = ma + rma*self.p.mult_kc
+        lKC = ma - rma*self.p.mult_kc
+
+        bool = bt.And(bands.bot>lKC, bands.top<uKC)
+
+        self.l.sqz = bt.If(bool,0.0,1.0)
+
+    def prenext(self):
+
+        self.l.y[0] = 0.0#self.data.close[0]
+
+    def next(self):
+
+        h = max(self.data.high.get(size=self.p.period_kc))
+        l = min(self.data.low.get(size=self.p.period_kc))
+        av1 = (h+l)/2
+        av2 = (av1 + self.l.ma[0])/2
+        self.l.y[0] = self.data.close[0] - av2
+
+        # Perform Linear Regression
+        x = np.arange(0,self.p.period_kc,1)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x, self.l.y.get(size=self.p.period_kc))
+        self.l.hist[0] = intercept + slope*(self.p.period_kc - 1.0).as_integer_ratio()
+
+class SchaffTrendCycle(bt.Indicator):
+
+    lines = ('schaff','macd','f1','f2','pf')
+
+    params = (
+        ('fast', 23),
+        ('slow', 50),
+        ('cycle', 10),
+        ('factor', 0.5)
+    )
+
+    plotinfo = dict(
+        plot=True,
+        plotname='Schaff Trend Cycle',
+        subplot=True,
+        plotlinelabels=True)
+
+    plotlines = dict(macd=dict(_plotskip=True, ),
+                     f1=dict(_plotskip=True, ),
+                     f2=dict(_plotskip=True, ),
+                     pf=dict(_plotskip=True, ),
+                     )
+
+    def __init__(self):
+        # Plot horizontal Line
+        self.plotinfo.plotyhlines = [25,75]
 
 
+        self.addminperiod(self.p.slow)
+        self.l.macd = bt.indicators.MACD(self.data,period_me1=self.p.fast,period_me2=self.p.slow)
 
+    def prenext(self):
+
+        self.l.f1[0] = self.data.close[0]
+        self.l.pf[0] = self.data.open[0]
+        self.l.f2[0] = self.data.high[0]
+        self.l.schaff[0] = self.data.low[0]
+
+    def next(self):
+
+        v1 = min(self.l.macd.get(size=self.p.cycle))
+        v2 = max(self.l.macd.get(size=self.p.cycle))-v1
+
+        self.l.f1[0] = 100*(self.l.macd[0]-v1)/v2 if v2 > 0 else self.l.f1[-1]
+        self.l.pf[0] = self.l.pf[-1] + (self.p.factor*(self.l.f1[0]-self.l.pf[-1]))
+
+        v3 = min(self.l.pf.get(size=self.p.cycle))
+        v4 = max(self.l.pf.get(size=self.p.cycle))-v3
+
+        self.l.f2[0] = 100*(self.l.pf[0]-v3)/v4 if v4 > 0 else self.l.f2[-1]
+        self.l.schaff[0] = self.l.schaff[-1] + (self.p.factor*(self.l.f2[0]-self.l.schaff[-1]))
+
+class SignalFiller(bt.Indicator):
+
+    lines = ('signal',)
+
+    def nexstart(self):
+        self.l.signal[0] = 0.0
+
+    def next(self):
+
+        if self.data[0] != 0:
+            self.l.signal[0] = self.data[0]
+        else:
+            self.l.signal[0] = self.l.signal[-1]

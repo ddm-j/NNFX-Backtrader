@@ -14,20 +14,21 @@ import glob
 
 class NNFX(bt.Strategy):
     params = dict(
-        base_ind='itrend',
-        base_params=(40,),
-        c1_ind='itrend',
-        c1_params=(40,),
-        c2_ind='cmf',
-        c2_params=(35,),
+        base_ind='butter',
+        base_params=(40,3),
+        c1_ind='schaff',
+        c1_params=(23,50,10,0.5),
+        c2_ind='itrend',
+        c2_params=(40,),
         volume_ind='wae',
-        volume_params=(80, 20, 40, 20, 2.0, 3.7),
+        volume_params=(150, 20, 40, 20, 2.0, 3.7),
         exit_ind='ssl',
         exit_params=(30,),
         atr_period=14,
         sl=1.5,
         tp=1.0,
         risk=2.0,
+        leverage=20,
         oneplot=False,
         verbose=False,
     )
@@ -39,7 +40,6 @@ class NNFX(bt.Strategy):
 
     def __init__(self):
         """Initialization"""
-
         # Strategy Declarations
         self.order = None
         self.broker.set_coc=True
@@ -68,7 +68,7 @@ class NNFX(bt.Strategy):
             self.inds[d]['atr'] = bt.indicators.ATR(d,period=self.p.atr_period, plot=False)
             # Generate Strategy Binary Indicators
             self.inds[d]['baseline'], self.inds[d]['too_far'] = self.igs[d].baseline_indicator(self.p.base_ind, self.p.base_params, plot=False)
-            self.inds[d]['c1'] = self.igs[d].entry_indicator(self.p.c1_ind, self.p.c1_params, plot=True)
+            self.inds[d]['c1'] = self.igs[d].entry_indicator(self.p.c1_ind, self.p.c1_params, plot=False)
             self.inds[d]['c2'] = self.igs[d].entry_indicator(self.p.c2_ind, self.p.c2_params, plot=False)
             self.inds[d]['volume'] = self.igs[d].volume_indicator(self.p.volume_ind, self.p.volume_params, plot=False)
             self.inds[d]['exit'] = self.igs[d].exit_indicator(self.p.exit_ind, self.p.exit_params, plot=False)
@@ -85,7 +85,7 @@ class NNFX(bt.Strategy):
             JPY = True if 'JPY' in [base, counter] else False
             if counter == self.accn_currency:
                 # Set Commission for Pairs where Counter and Account Currency are the Same
-                comminfo = forexSpreadCommisionScheme(spread=2,method=0,JPY_pair=JPY,leverage=20)
+                comminfo = forexSpreadCommisionScheme(spread=2,method=0,JPY_pair=JPY,leverage=self.p.leverage)
                 self.broker.addcommissioninfo(comminfo,name=key)
             elif base == self.accn_currency:
 
@@ -156,7 +156,6 @@ class NNFX(bt.Strategy):
                 move_stop = self.sell(size=size,
                                      exectype=bt.Order.StopTrail,
                                      trailamount=self.params.sl*self.inds[order.data]['atr'][0])
-
 
         self.bar_executed = len(self)
         self.order = None
@@ -238,7 +237,7 @@ class NNFX(bt.Strategy):
                                                   method=1,
                                                   JPY_pair=JPY,
                                                   mult=currency_conversion,
-                                                  leverage=20)
+                                                  leverage=self.p.leverage)
 
         # Case 2: XXXYYY
         else:
@@ -257,7 +256,7 @@ class NNFX(bt.Strategy):
                                                   JPY_pair=JPY,
                                                   exchange_rate=exchange_rate,
                                                   mult=currency_conversion,
-                                                  leverage=20)
+                                                  leverage=self.p.leverage)
         self.broker.addcommissioninfo(comminfo, name=d._name)
 
     def pullback(self,d):
@@ -342,7 +341,6 @@ class NNFX(bt.Strategy):
             pos = self.getposition(d).size
             # Check if we are in the Market - Only Proceed if we are not
             if all(v == 0 for v in list(self.position_dict.values())):
-
                 # Check Pullback & Bridge too Far Logic
                 if self.inds[d]['baseline'] != 0.0:
                     self.pullback(d)
@@ -445,6 +443,9 @@ if __name__ == '__main__':
     # Create a cerebro entity
     cerebro = bt.Cerebro()
 
+    # Enable Slippage on Open Price (Approximately %0.01 percent)
+    cerebro.broker = bt.brokers.BackBroker(slip_perc=0.0001,slip_open=True)
+
     # Add our strategy
 
     cerebro.addstrategy(NNFX)
@@ -456,6 +457,9 @@ if __name__ == '__main__':
     datasets = [
         (dpath+path,name) for path, name in zip(paths,names)
     ]
+
+    trade_pairs = ['EURUSD']
+    datasets = [i for i in datasets if i[1] in trade_pairs]
 
     # Create a Data Feeds and Add to Cerebro
 
@@ -489,4 +493,4 @@ if __name__ == '__main__':
     printTradeAnalysis(firstStrat.analyzers.ta.get_analysis())
     printSQN(firstStrat.analyzers.sqn.get_analysis())
 
-    #cerebro.plot(style='candle')
+    cerebro.plot(style='candle')

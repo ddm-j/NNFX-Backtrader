@@ -37,6 +37,11 @@ class IndicatorGenerator(object):
             'fama':2,
             'dosc':1,
             'idosc':2,
+            'laguerre':1,
+            'alaguerre':1,
+            'butter':2,
+            'squeeze':5,
+            'schaff':4
         }
 
     def check_input(self,ind,params):
@@ -79,6 +84,18 @@ class IndicatorGenerator(object):
         elif ind == 'mama':
             mama = MAMA(self.data,fast=params[0],slow=params[1],plot=plot)
             base = mama.MAMA
+
+        elif ind == 'laguerre':
+            lag = LaguerreFilter(self.data, period=params[0], plot=plot)
+            base = lag.filter
+
+        elif ind == 'alaguerre':
+            alag = AdaptiveLaguerreFilter(self.data, length=params[0], plot=plot)
+            base = alag.filter
+
+        elif ind == 'butter':
+            butterworth = Butterworth(self.data, period=params[0], poles=params[1], plot=plot)
+            base = butterworth.butter
 
 
         # Baseline Crossover Detection
@@ -181,6 +198,14 @@ class IndicatorGenerator(object):
             entry = bt.Cmp(idosc.idosc,0.0)
             return entry
 
+        elif ind == 'schaff':
+            schaff = SchaffTrendCycle(self.data,fast=params[0],slow=params[1],cycle=params[2],factor=params[3],plot=plot)
+            buy = bt.indicators.CrossUp(schaff.schaff,25.0,plot=plot)
+            sell = bt.indicators.CrossDown(schaff.schaff,75.0,plot=plot)
+            binary = buy - sell
+            entry = SignalFiller(binary,plot=plot).signal
+            return entry
+
     def volume_indicator(self, ind, params, plot=True):
         """
         Function that returns and binary volume confirmation indicator for simple strategy logic useage
@@ -224,6 +249,11 @@ class IndicatorGenerator(object):
                           wae.exp>wae.dead)
             volume = buy-sell
             return volume
+
+        elif ind == 'squeeze':
+
+            sqz = SqueezeVolatility(self.data,period=params[0],mult=params[1],period_kc=params[2],mult_kc=params[3],movav=params[4])
+            return sqz.sqz
 
     def exit_indicator(self, ind, params, plot=True):
         """
