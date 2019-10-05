@@ -1,10 +1,12 @@
 from opt_utilities import *
+from itertools import product
 
 class Optimization(object):
 
-    def __init__(self):
+    def __init__(self,selections):
         self.master = MasterParameters()
         self.ingest = dict()
+        self.selections = selections
         # Define The Indicators for Optimization
 
     def baseline(self,lower,upper):
@@ -219,16 +221,141 @@ class Optimization(object):
             ],
         }
 
+    def volume(self,lower,upper):
+        typ = 'volume'
+        self.ingest[typ] = dict()
+
+        # CVI - Chaikin Volatility Index
+        self.ingest[typ]['cvi'] = {
+            'input': {
+                0: (int, [lower, upper]),
+                1: (int, [lower, upper])
+            },
+            'conds': None,
+        }
+
+        # Trend Direction & Force Index
+        self.ingest[typ]['tdfi'] = {
+            'input': {
+                0: (int, [lower, upper])
+            },
+            'conds': None,
+        }
+
+        # WAE - Waddah Attar Explosion
+        self.ingest[typ]['wae'] = {
+            'input': {
+                0: ('custom', [50,100,150,200,250,300]), # Sensitivity
+                1: (int, [lower, upper]), # Fast
+                2: (int, [lower, upper]), # Slow
+                3: (int, [lower, upper]), # Channel
+                4: ('custom', [0.5,1.0,1.5,2.0,2.5,3.0]), # STD Dev
+                5: (float, [1.0,5.0]) # Dead Zone Value
+            },
+            'conds': [
+                [2, '>', 1]
+            ],
+        }
+
+        # TTM Squeeze Volatility
+        self.ingest[typ]['squeeze'] = {
+            'input': {
+                0: (int, [lower, upper]), #period
+                1: (float, [0.25, 3.0]), #mult
+                2: (int, [lower, upper]), #period_kc
+                3: (float, [0.25, 3.0]), #mult_kc
+                4: ('mas', None)
+            },
+            'conds': None,
+        }
+
+        # Damiani Volatmeter
+        self.ingest[typ]['damiani'] = {
+            'input': {
+                0: (int, [lower, upper]), # Fast ATR
+                1: (int, [lower, upper]), # Fast STD
+                2: (int, [lower, upper]), # Slow ATR
+                3: (int, [lower, upper]), # Slow STD
+                4: (float, [0.5, 3.0]), # Threshold
+                5: (bool, None)
+            },
+            'conds': [
+                [2, '>', 0],
+                [3, '>', 1]
+            ],
+        }
+
+    def exit(self,lower, upper):
+        typ = 'exit'
+        self.ingest[typ] = dict()
+
+        # SSL Channel
+        self.ingest[typ]['ssl'] = {
+            'input': {
+                0: (int, [lower, upper])
+            },
+            'conds': None,
+        }
+
+        # iTrend
+        self.ingest[typ]['itrend'] = {
+            'input': {
+                0: (int, [lower, upper])
+            },
+            'conds': None,
+        }
+
+        # MAMA
+        self.ingest[typ]['mama'] = {
+            'input': {
+                0: (int, [lower, upper]),
+                1: (int, [lower, upper]),
+            },
+            'conds': [
+                [1, '>', 0]
+            ],
+        }
+
+        # Decylcer Oscillator
+        self.ingest[typ]['dosc'] = {
+            'input': {
+                0: (int, [lower, upper])
+            },
+            'conds': None,
+        }
 
     def load_indicators(self,density):
-        self.baseline(8,60)
-        self.confirmation(8,60)
+        self.baseline(8,40)
+        self.confirmation(8,40)
+        self.volume(8,40)
+        self.exit(8,40)
         for typ, ind in self.ingest.items():
             for name, args in ind.items():
+                if name not in self.selections[typ]:
+                    continue
                 self.master.add_indicator(typ,name,args['input'],args['conds'],density)
 
-opt = Optimization()
-opt.load_indicators(10)
+    def generate_combinations(self):
 
-for i in opt.master.parameter_sets['confirmation']:
-    print(i)
+        baseline = [item for sublist in self.master.parameter_sets['baseline'] for item in sublist]
+        confirmation = [item for sublist in self.master.parameter_sets['confirmation'] for item in sublist]
+        volume = [item for sublist in self.master.parameter_sets['volume'] for item in sublist]
+        exit = [item for sublist in self.master.parameter_sets['exit'] for item in sublist]
+
+        combinations = list(product(baseline,confirmation,confirmation,volume,exit))
+        print(len(combinations))
+
+
+# Selection Tests
+selections = {
+    'baseline': ['kijun'],
+    'confirmation': ['itrend'],
+    'volume': ['cvi'],
+    'exit': ['itrend']
+}
+
+opt = Optimization(selections)
+
+opt.load_indicators(5)
+opt.generate_combinations()
+

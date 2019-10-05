@@ -979,7 +979,6 @@ class SchaffTrendCycle(bt.Indicator):
         # Plot horizontal Line
         self.plotinfo.plotyhlines = [25,75]
 
-
         self.addminperiod(self.p.slow)
         self.l.macd = bt.indicators.MACD(self.data,period_me1=self.p.fast,period_me2=self.p.slow)
 
