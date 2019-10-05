@@ -1091,4 +1091,3 @@ class DamianiVolatmeter(bt.Indicator):
         self.l.v[0] = self.l.aF[0]/self.l.aS[0] + self.lag_s*(s1-s3) if self.p.lag_supress else self.l.aF[0]/self.l.aS[0]
         anti_thresh = self.l.sF[0]/self.l.sS[0]
         self.l.t[0] = self.p.thresh - anti_thresh
-        
