@@ -41,7 +41,8 @@ class IndicatorGenerator(object):
             'alaguerre':1,
             'butter':2,
             'squeeze':5,
-            'schaff':4
+            'schaff':4,
+            'damiani':6
         }
 
     def check_input(self,ind,params):
@@ -254,6 +255,17 @@ class IndicatorGenerator(object):
 
             sqz = SqueezeVolatility(self.data,period=params[0],mult=params[1],period_kc=params[2],mult_kc=params[3],movav=params[4])
             return sqz.sqz
+
+        elif ind == 'damiani':
+            dv = DamianiVolatmeter(self.data,
+                                   atr_fast=params[0],
+                                   std_fast=params[1],
+                                   atr_slow=params[2],
+                                   std_slow=params[3],
+                                   thresh=params[4],
+                                   lag_supress=params[5])
+            volume = bt.If(bt.Cmp(dv.v,dv.t)>0,1.0,0.0)
+            return volume
 
     def exit_indicator(self, ind, params, plot=True):
         """

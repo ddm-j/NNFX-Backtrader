@@ -17,16 +17,16 @@ class NNFX(bt.Strategy):
         base_ind='butter',
         base_params=(40,3),
         c1_ind='schaff',
-        c1_params=(23,50,10,0.5),
+        c1_params=(20,50,10,0.5),
         c2_ind='itrend',
-        c2_params=(40,),
-        volume_ind='wae',
-        volume_params=(150, 20, 40, 20, 2.0, 3.7),
+        c2_params=(30,),
+        volume_ind='damiani',
+        volume_params=(13,20,40,100,1.4,True),
         exit_ind='ssl',
-        exit_params=(30,),
+        exit_params=(20,),
         atr_period=14,
         sl=1.5,
-        tp=1.0,
+        tp=3.0,
         risk=2.0,
         leverage=20,
         oneplot=False,
@@ -40,6 +40,7 @@ class NNFX(bt.Strategy):
 
     def __init__(self):
         """Initialization"""
+        self.dv = DamianiVolatmeter(self.data)
         # Strategy Declarations
         self.order = None
         self.broker.set_coc=True
@@ -438,6 +439,7 @@ class NNFX(bt.Strategy):
                     # Check for Buy Exit Signal
                     if any(buyexit_conds):
                         self.order = self.close(data=d)
+
 
 if __name__ == '__main__':
     # Create a cerebro entity
