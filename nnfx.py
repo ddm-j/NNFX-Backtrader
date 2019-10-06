@@ -14,6 +14,7 @@ import glob
 
 class NNFX(bt.Strategy):
     params = dict(
+        optim=None,
         base_ind='butter',
         base_params=(40,3),
         c1_ind='schaff',
@@ -40,7 +41,19 @@ class NNFX(bt.Strategy):
 
     def __init__(self):
         """Initialization"""
-        self.dv = DamianiVolatmeter(self.data)
+        # Determine if this is an Optimization run:
+        if self.p.optim:
+            self.p.base_ind=self.p.optim[0][0]
+            self.p.base_params=self.p.optim[0][1]
+            self.p.c1_ind = self.p.optim[1][0]
+            self.p.c1_params = self.p.optim[1][1]
+            self.p.c2_ind = self.p.optim[2][0]
+            self.p.c2_params = self.p.optim[2][1]
+            self.p.volume_ind = self.p.optim[3][0]
+            self.p.volume_params = self.p.optim[3][1]
+            self.p.exit_ind = self.p.optim[4][0]
+            self.p.exit_params = self.p.optim[4][1]
+
         # Strategy Declarations
         self.order = None
         self.broker.set_coc=True

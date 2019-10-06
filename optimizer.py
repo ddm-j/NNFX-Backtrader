@@ -1,5 +1,10 @@
 from opt_utilities import *
 from itertools import product
+from custom_functions import *
+from nnfx import NNFX
+import pandas as pd
+from tqdm import tqdm
+import time
 
 class Optimization(object):
 
@@ -141,7 +146,8 @@ class Optimization(object):
         # Trend Direction & Force Index
         self.ingest[typ]['tdfi'] = {
             'input': {
-                0: (int, [lower, upper])
+                0: (int, [lower, upper]),
+                1: ('custom', [0.05])
             },
             'conds': None,
         }
@@ -237,7 +243,8 @@ class Optimization(object):
         # Trend Direction & Force Index
         self.ingest[typ]['tdfi'] = {
             'input': {
-                0: (int, [lower, upper])
+                0: (int, [lower, upper]),
+                1: ('custom', [0.05])
             },
             'conds': None,
         }
@@ -325,6 +332,7 @@ class Optimization(object):
         }
 
     def load_indicators(self,density):
+
         self.baseline(8,40)
         self.confirmation(8,40)
         self.volume(8,40)
@@ -343,19 +351,85 @@ class Optimization(object):
         exit = [item for sublist in self.master.parameter_sets['exit'] for item in sublist]
 
         combinations = list(product(baseline,confirmation,confirmation,volume,exit))
-        print(len(combinations))
+        combinations  = [x for x in combinations if x[1][0]==x[2][0]]
+        self.combinations = combinations
+
+    def optimize(self):
+
+        # Parameter Initialization
+
+        print('Loading Indicators')
+        self.load_indicators(5)
+        print('Generating Combinations')
+        self.generate_combinations()
+        print('%i Combinations generated for testing' % len(self.combinations))
+
+        # Create a cerebro entity
+        cerebro = bt.Cerebro(stdstats=False,maxcpus=8)
+
+        # Enable Slippage on Open Price (Approximately %0.01 percent)
+        cerebro.broker = bt.brokers.BackBroker(slip_perc=0.0001, slip_open=True)
+
+        # Add our strategy
+
+        cerebro.optstrategy(NNFX,optim=self.combinations[0:10])
+
+        # Get Data Files from Data Folder
+        paths, names = file_browser()
+
+        dpath = 'Data/'
+        datasets = [
+            (dpath + path, name) for path, name in zip(paths, names)
+        ]
+
+        trade_pairs = ['EURUSD','GBPUSD','USDCHF','NZDUSD']
+        datasets = [i for i in datasets if i[1] in trade_pairs]
+
+        # Create a Data Feeds and Add to Cerebro
+
+        for i in range(len(datasets)):
+            data = bt.feeds.GenericCSVData(dataname=datasets[i][0],
+                                           openinterest=-1,
+                                           dtformat='%d.%m.%Y %H:%M:%S.000')
+            cerebro.adddata(data, name=datasets[i][1])
+
+        # Set our desired cash start
+        cerebro.broker.setcash(1000.0)
+
+        # Add Analyzers
+        cerebro.addanalyzer(bt.analyzers.SQN, _name="sqn")
+
+        #opt_count_total = len(self.combinations[0:10])
+        #pbar = tqdm(smoothing=0.05, desc='Optimization', total=opt_count_total)
+        #def optimization_step(NNFX):
+        #    pbar.update()
+
+        #cerebro.optcallback(optimization_step)
+        t0 = time.time()
+        res = cerebro.run()
+        t1 = time.time()
+
+        print('Time Elapsed: %.2f'% (t1-t0))
+
+        return_opt = pd.DataFrame({r[0].params.optim: r[0].analyzers.sqn.get_analysis() for r in res}).T.loc[:,['sqn']]
+        return_opt.to_csv('opt_results.csv')
+        print(return_opt)
 
 
-# Selection Tests
-selections = {
-    'baseline': ['kijun'],
-    'confirmation': ['itrend'],
-    'volume': ['cvi'],
-    'exit': ['itrend']
-}
+if __name__ == '__main__':
 
-opt = Optimization(selections)
+    #freeze_support()
+    # Selection Tests
+    selections = {
+        'baseline': ['kijun'],
+        'confirmation': ['itrend','mama'],
+        'volume': ['tdfi'],
+        'exit': ['ssl']
+    }
 
-opt.load_indicators(5)
-opt.generate_combinations()
+
+    opt = Optimization(selections)
+    opt.optimize()
+
+
 
