@@ -351,7 +351,7 @@ class Optimization(object):
         exit = [item for sublist in self.master.parameter_sets['exit'] for item in sublist]
 
         combinations = list(product(baseline,confirmation,confirmation,volume,exit))
-        combinations  = [x for x in combinations if x[1][0]==x[2][0]]
+        combinations  = [x for x in combinations if x[1][0]!=x[2][0]]
         self.combinations = combinations
 
     def optimize(self):
@@ -365,14 +365,14 @@ class Optimization(object):
         print('%i Combinations generated for testing' % len(self.combinations))
 
         # Create a cerebro entity
-        cerebro = bt.Cerebro(stdstats=False,maxcpus=8)
+        cerebro = bt.Cerebro(stdstats=False)
 
         # Enable Slippage on Open Price (Approximately %0.01 percent)
         cerebro.broker = bt.brokers.BackBroker(slip_perc=0.0001, slip_open=True)
 
         # Add our strategy
 
-        cerebro.optstrategy(NNFX,optim=self.combinations[0:10])
+        cerebro.optstrategy(NNFX,optim=self.combinations[0:30])
 
         # Get Data Files from Data Folder
         paths, names = file_browser()
@@ -382,7 +382,7 @@ class Optimization(object):
             (dpath + path, name) for path, name in zip(paths, names)
         ]
 
-        trade_pairs = ['EURUSD','GBPUSD','USDCHF','NZDUSD']
+        trade_pairs = ['EURUSD','GBPUSD','USDCHF','USDJPY']
         datasets = [i for i in datasets if i[1] in trade_pairs]
 
         # Create a Data Feeds and Add to Cerebro
