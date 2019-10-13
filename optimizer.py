@@ -587,7 +587,7 @@ class Optimization(object):
         toolbox.decorate("mate", self.checkBounds(ranges))
 
         # Register Mutation
-        toolbox.register("mutate", tools.mutFlipBit, indpb=0.05)
+        toolbox.register("mutate", mutRandPermut, types=types, ranges=ranges, indpb=0.05)
         toolbox.decorate("mutate", self.checkBounds(ranges))
 
         # Register Selection
@@ -599,7 +599,7 @@ class Optimization(object):
         for ind, fit in zip(pop, fitnesses):
             ind.fitness.values = (fit,)
 
-        CXPB, MUTPB = 0.5, 0.2
+        CXPB, MUTPB = 0.9, 0.1
 
         # Extracting all the fitnesses
         fits = [ind.fitness.values[0] for ind in pop]

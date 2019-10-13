@@ -3,6 +3,7 @@ from collections import OrderedDict
 import numpy as np
 from itertools import product
 import operator
+import random
 
 
 class IndicatorParameters(object):
@@ -94,5 +95,40 @@ class MasterParameters(object):
         ind.get()
         param_set = ind.combinations
         self.parameter_sets[ind_type].append(param_set)
+
+def mutRandPermut(individual, types, ranges, indpb):
+    """Flip the value of the attributes of the input individual and return the
+    mutant. The *individual* is expected to be a :term:`sequence` and the values of the
+    attributes shall stay valid after the ``not`` operator is called on them.
+    The *indpb* argument is the probability of each attribute to be
+    flipped. This mutation is usually applied on boolean individuals.
+    :param individual: Individual to be mutated.
+    :param indpb: Independent probability for each attribute to be flipped.
+    :returns: A tuple of one individual.
+    This function uses the :func:`~random.random` function from the python base
+    :mod:`random` module.
+    """
+    for i in range(len(individual)):
+        if random.random() < indpb:
+            # General Integer
+            if types[i] == int:
+                choice = random.randint(ranges[i][0],ranges[i][1])
+                while choice == individual[i]:
+                    choice = random.randint(ranges[i][0], ranges[i][1])
+                individual[i] = choice
+            elif types[i] == float:
+                choice = random.uniform(ranges[i][0], ranges[i][1])
+                while choice == individual[i]:
+                    choice = random.uniform(ranges[i][0], ranges[i][1])
+                individual[i] = choice
+            elif types[i] == 'custom':
+                choice = random.choice(ranges[i])
+                while choice == individual[i]:
+                    choice = random.choice(ranges[i])
+                individual[i] = choice
+            else:
+                print('Some Error Occurred')
+
+    return individual,
 
 
